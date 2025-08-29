@@ -1,207 +1,351 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[codz]
-*$py.class
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Prediksi 2D – Sistem Eliminasi 20 + Historis + Backtest Otomatis
+Author : You
+Python : 3.7+
+"""
 
-# C extensions
-*.so
+import itertools
+import os
+import sys
+import time
+from typing import List, Dict, Set, Tuple
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+# ──────────────────────────────────────────────────────────────
+# ANSI color & style helpers
+# ──────────────────────────────────────────────────────────────
+RESET = "\033[0m"
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+def colored(text: str, color: str = "white", style: str = "normal") -> str:
+    styles = {
+        "normal": 0,
+        "bold": 1,
+        "dim": 2,
+        "italic": 3,
+        "underline": 4,
+    }
+    colors = {
+        "red": 31,
+        "green": 32,
+        "yellow": 33,
+        "blue": 34,
+        "magenta": 35,
+        "cyan": 36,
+        "white": 37,
+        "bright_red": 91,
+        "bright_green": 92,
+        "bright_yellow": 93,
+        "bright_blue": 94,
+        "bright_magenta": 95,
+        "bright_cyan": 96,
+    }
+    s = styles.get(style, 0)
+    c = colors.get(color, 37)
+    return f"\033[{s};{c}m{text}{RESET}"
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+def clear_screen() -> None:
+    os.system("cls" if os.name == "nt" else "clear")
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py.cover
-.hypothesis/
-.pytest_cache/
-cover/
+# ──────────────────────────────────────────────────────────────
+# Banner ASCII
+# ──────────────────────────────────────────────────────────────
+BANNER = colored(
+    r"""
+  ____       _      _____ _  __   ____  ____  ____  _____
+ |  _ \ ___ | |_   |_   _| |/ /  |  _ \| __ )|  _ \| ____|
+ | |_) / _ \| __|    | | | ' /   | | | |  _ \| | | |  _|
+ |  _ < (_) | |_     | | | . \   | |_| | |_) | |_| | |___
+ |_| \_\___/ \__|    |_| |_|\_\  |____/|____/|____/|_____|
+""",
+    "cyan",
+    "bold",
+)
 
-# Translations
-*.mo
-*.pot
+# ──────────────────────────────────────────────────────────────
+# Data asli Anda
+# ──────────────────────────────────────────────────────────────
+tabel_ekor_abadi = {
+    0: [4, 6, 8, 1, 3, 7],
+    1: [3, 5, 9, 2, 4, 8],
+    2: [0, 6, 4, 7, 5, 9],
+    3: [1, 7, 2, 8, 9, 0],
+    4: [0, 2, 6, 1, 5, 9],
+    5: [1, 3, 6, 4, 0, 2],
+    6: [0, 4, 8, 1, 7, 9],
+    7: [1, 3, 5, 2, 4, 8],
+    8: [0, 6, 4, 7, 5, 9],
+    9: [1, 5, 7, 0, 2, 6],
+}
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+tabel_besar = {
+    0: [13, 26, 3, 37, 38, 39, 61, 86, 63, 97, 98, 99, 64, 29, 6, 43, 53, 66, 19, 65, 90, 76, 32, 33, 49, 59, 69],
+    1: [1, 14, 15, 2, 27, 3, 13, 87, 37, 50, 75, 61, 61, 85, 13, 39, 13, 87, 97, 74, 87, 28, 89, 76],
+    2: [3, 1, 4, 15, 2, 27, 1, 2, 3, 1, 14, 15, 50, 75, 61, 61, 85, 13, 39, 13, 87, 97, 74, 87],
+    3: [5, 2, 1, 1, 3, 1, 14, 15, 37, 50, 75, 61, 61, 85, 13, 39, 13, 87, 97, 74, 87, 28, 89, 76, 91],
+    4: [2, 7, 1, 2, 3, 1, 14, 15, 37, 50, 75, 61, 61, 85, 13, 39, 13, 87, 97, 74, 87, 28, 89],
+    5: [1, 2, 3, 1, 14, 15, 37, 50, 75, 61, 61, 85, 13, 39, 13, 87, 97, 74, 87, 28, 89, 76, 91, 74, 91],
+    6: [1, 14, 15, 37, 50, 75, 61, 61, 85, 13, 39, 13, 87, 97, 74, 87, 28, 89, 76, 91, 74, 91, 64],
+    7: [1, 3, 5, 2, 4, 8, 13, 25, 37, 49, 61, 73, 85, 97, 2, 14, 26, 38, 50, 62, 74, 86, 98, 7, 19, 31, 43, 55, 67, 79, 91],
+    8: [0, 6, 4, 7, 5, 9, 6, 18, 30, 42, 54, 66, 78, 90, 8, 20, 32, 44, 56, 68, 80, 92, 15, 27, 39],
+    9: [1, 5, 7, 0, 2, 6, 9, 21, 33, 45, 57, 69, 81, 93, 4, 16, 28, 40, 52, 64, 76, 88],
+}
 
-# Flask stuff:
-instance/
-.webassets-cache
+mistik_baru = {0: 8, 1: 7, 2: 6, 3: 9, 4: 5}
+mistik_lama = {0: 1, 2: 5, 3: 8, 4: 7, 6: 9}
 
-# Scrapy stuff:
-.scrapy
+HISTORY_FILE = "history.txt"
 
-# Sphinx documentation
-docs/_build/
+# ──────────────────────────────────────────────────────────────
+# Fungsi: Variasi mistik
+# ──────────────────────────────────────────────────────────────
+def variasi_mistik(angka_str: str) -> set:
+    digit1 = int(angka_str[0])
+    digit2 = int(angka_str[1])
+    options1 = {str(digit1)}
+    if digit1 in mistik_baru:
+        options1.add(str(mistik_baru[digit1]))
+    if digit1 in mistik_lama:
+        options1.add(str(mistik_lama[digit1]))
+    options2 = {str(digit2)}
+    if digit2 in mistik_baru:
+        options2.add(str(mistik_baru[digit2]))
+    if digit2 in mistik_lama:
+        options2.add(str(mistik_lama[digit2]))
+    return {''.join(pair) for pair in itertools.product(options1, options2)}
 
-# PyBuilder
-.pybuilder/
-target/
+# ──────────────────────────────────────────────────────────────
+# Fungsi: Hitung skor setiap angka 2D
+# ──────────────────────────────────────────────────────────────
+def hitung_skor_angka(angka_2d: str, as_kepala_ekor: str, history: List[str]) -> int:
+    skor = 0
+    a = int(as_kepala_ekor[0])
+    k = int(as_kepala_ekor[1])
+    e = int(as_kepala_ekor[3])
+    total_ak = (a + k) % 10
 
-# Jupyter Notebook
-.ipynb_checkpoints
+    d1, d2 = int(angka_2d[0]), int(angka_2d[1])
 
-# IPython
-profile_default/
-ipython_config.py
+    # 1. Cocok dengan ekor abadi?
+    if d2 in tabel_ekor_abadi.get(e, []):
+        skor += 10
 
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
+    # 2. Apakah dalam tabel besar?
+    if int(angka_2d) in tabel_besar.get(d2, []):
+        skor += 8
 
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
+    # 3. Mistik baru/lama pada digit?
+    if d1 in mistik_baru.values() or d1 in mistik_lama.values():
+        skor += 5
+    if d2 in mistik_baru.values() or d2 in mistik_lama.values():
+        skor += 5
 
-# UV
-#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#uv.lock
+    # 4. Hasil variasi dari (a+k) mod 10?
+    sum_digit = str(total_ak)
+    variasi = {v for v in variasi_mistik(sum_digit + "0")}
+    if angka_2d in variasi or angka_2d[::-1] in variasi:
+        skor += 7
 
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
-#poetry.toml
+    # 5. Frekuensi historis: jika jarang muncul (dingin), skor naik
+    freq = sum(1 for res in history for part in [res[2:], res[:2]] if part == angka_2d)
+    if freq == 0:
+        skor += 6  # Angka dingin, potensi muncul besar
+    elif freq == 1:
+        skor += 3
+    elif freq >= 5:
+        skor -= 4  # Terlalu sering, mungkin jeda
 
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#   pdm recommends including project-wide configuration in pdm.toml, but excluding .pdm-python.
-#   https://pdm-project.org/en/latest/usage/project/#working-with-version-control
-#pdm.lock
-#pdm.toml
-.pdm-python
-.pdm-build/
+    # 6. Angka berulang (00,11,...) → dikurangi
+    if d1 == d2:
+        skor -= 3
 
-# pixi
-#   Similar to Pipfile.lock, it is generally recommended to include pixi.lock in version control.
-#pixi.lock
-#   Pixi creates a virtual environment in the .pixi directory, just like venv module creates one
-#   in the .venv directory. It is recommended not to include this directory in version control.
-.pixi
+    return skor
 
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
+# ──────────────────────────────────────────────────────────────
+# Fungsi: Simpan & Load Histori
+# ──────────────────────────────────────────────────────────────
+def load_history() -> List[str]:
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    try:
+        with open(HISTORY_FILE, "r") as f:
+            lines = [line.strip() for line in f if line.strip().isdigit() and len(line.strip()) == 4]
+        return lines
+    except:
+        return []
 
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
+def save_history(history: List[str]) -> None:
+    with open(HISTORY_FILE, "w") as f:
+        f.write("\n".join(history))
 
-# SageMath parsed files
-*.sage.py
+# ──────────────────────────────────────────────────────────────
+# Fungsi Utama: Eliminasi 20 Angka Lemah → Kembalikan 80 Kuat
+# ──────────────────────────────────────────────────────────────
+def generate_80_angka_kuat(previous_full: str, history: List[str]) -> Tuple[List[str], List[str]]:
+    all_2d = [f"{i:02d}" for i in range(100)]
+    skor_map: Dict[str, int] = {}
 
-# Environments
-.env
-.envrc
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+    for angka in all_2d:
+        skor = hitung_skor_angka(angka, previous_full, history)
+        skor_map[angka] = skor
 
-# Spyder project settings
-.spyderproject
-.spyproject
+    sorted_by_score = sorted(skor_map.items(), key=lambda x: x[1])
+    dibunuh = [item[0] for item in sorted_by_score[:20]]
+    kuat = [item[0] for item in sorted_by_score[20:]]
 
-# Rope project settings
-.ropeproject
+    return sorted(kuat), dibunuh
 
-# mkdocs documentation
-/site
+# ──────────────────────────────────────────────────────────────
+# Backtest Otomatis
+# ──────────────────────────────────────────────────────────────
+def backtest(history: List[str]) -> None:
+    if len(history) < 2:
+        print(colored("\n❌ Butuh minimal 2 data untuk backtest!", "red"))
+        input(colored("\nTekan Enter...", "dim"))
+        return
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+    benar = 0
+    total = len(history) - 1  # Prediksi dari data ke-1 sampai n-1
 
-# Pyre type checker
-.pyre/
+    print(colored(f"\n🔍 Backtest Otomatis ({total} putaran)", "bright_yellow", "bold"))
 
-# pytype static type analyzer
-.pytype/
+    for i in range(total):
+        prev = history[i]
+        actual = history[i + 1]
+        ekor_actual = actual[2:]  # 2 digit terakhir
 
-# Cython debug symbols
-cython_debug/
+        kuat, _ = generate_80_angka_kuat(prev, history[:i+1])
 
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+        status = "✅" if ekor_actual in kuat else "❌"
+        if ekor_actual in kuat:
+            benar += 1
 
-# Abstra
-# Abstra is an AI-powered process automation framework.
-# Ignore directories containing user credentials, local state, and settings.
-# Learn more at https://abstra.io/docs
-.abstra/
+        print(f"{status} {prev} → {actual} | Ekor: {ekor_actual} | {'Ada' if ekor_actual in kuat else 'Tidak'} di 80 kuat")
 
-# Visual Studio Code
-#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
-#  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
-#  you could uncomment the following to ignore the entire vscode folder
-# .vscode/
+    akurasi = (benar / total) * 100
+    warna = "green" if akurasi >= 80 else "yellow" if akurasi >= 60 else "red"
+    print(colored(f"\n📊 Total Benar: {benar}/{total} → Akurasi: {akurasi:.1f}%", warna, "bold"))
+    input(colored("\nTekan Enter untuk kembali...", "dim"))
 
-# Ruff stuff:
-.ruff_cache/
+# ──────────────────────────────────────────────────────────────
+# Tampilkan Statistik Frekuensi
+# ──────────────────────────────────────────────────────────────
+def show_stats(history: List[str]) -> None:
+    freq: Dict[str, int] = {f"{i:02d}": 0 for i in range(100)}
+    for result in history:
+        depan = result[:2]
+        belakang = result[2:]
+        if depan in freq: freq[depan] += 1
+        if belakang in freq: freq[belakang] += 1
 
-# PyPI configuration file
-.pypirc
+    sorted_freq = sorted(freq.items(), key=lambda x: x[1])
 
-# Cursor
-#  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
-#  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
-#  refer to https://docs.cursor.com/context/ignore-files
-.cursorignore
-.cursorindexingignore
+    print(colored(f"\n🔥 10 Angka Terpanas:", "bright_red", "bold"))
+    for angka, cnt in sorted_freq[-10:]:
+        print(f"  {colored(angka, 'bright_red')} → {cnt}x")
 
-# Marimo
-marimo/_static/
-marimo/_lsp/
-__marimo__/
+    print(colored(f"\n❄️ 10 Angka Terdingin:", "bright_cyan", "bold"))
+    for angka, cnt in sorted_freq[:10]:
+        print(f"  {colored(angka, 'bright_cyan')} → {cnt}x")
+
+    input(colored("\nTekan Enter untuk kembali...", "dim"))
+
+# ──────────────────────────────────────────────────────────────
+# Animasi loading
+# ──────────────────────────────────────────────────────────────
+def loading_animation(duration: float = 1.2):
+    frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    for _ in range(int(duration * 10)):
+        sys.stdout.write("\r" + colored(frames[_ % len(frames)], "cyan") + " Sedang memproses...")
+        sys.stdout.flush()
+        time.sleep(0.1)
+    sys.stdout.write("\r" + " " * 50 + "\r")
+
+# ──────────────────────────────────────────────────────────────
+# Menu interaktif
+# ──────────────────────────────────────────────────────────────
+def menu() -> None:
+    history = load_history()
+    while True:
+        clear_screen()
+        print(BANNER)
+        print(colored(f"\n📁 Histori: {len(history)} data", "blue", "dim"))
+        print(colored("\n [1] Prediksi 80 Angka Kuat", "bright_green"))
+        print(colored(" [2] Tambah Histori Manual", "cyan"))
+        print(colored(" [3] Backtest Otomatis", "bright_yellow"))
+        print(colored(" [4] Statistik Frekuensi", "magenta"))
+        print(colored(" [5] Hapus Semua Histori", "red"))
+        print(colored(" [6] Keluar\n", "bright_red"))
+
+        choice = input(colored("Pilih menu: ", "yellow")).strip()
+
+        if choice == "1":
+            previous = input(colored("\nMasukkan 4 digit hasil sebelumnya (contoh 5287): ", "cyan")).strip()
+            if not previous.isdigit() or len(previous) != 4:
+                print(colored("Input harus 4 digit angka!", "red"))
+                input(colored("\nTekan Enter...", "dim"))
+                continue
+            loading_animation()
+            result, killed = generate_80_angka_kuat(previous, history)
+
+            clear_screen()
+            print(BANNER)
+            print(colored(f"\n💀 Dibunuh (20 angka lemah):", "red", "bold"))
+            for i, val in enumerate(killed):
+                end = "\n" if (i + 1) % 10 == 0 else " "
+                print(colored(val, "red"), end=end)
+            if len(killed) % 10:
+                print()
+
+            print(colored(f"\n✅ 80 Angka Kuat:", "green", "bold"))
+            for i, val in enumerate(result):
+                end = "\n" if (i + 1) % 10 == 0 else " "
+                print(colored(val, "bright_blue"), end=end)
+            if len(result) % 10:
+                print()
+
+            input(colored("\n\nTekan Enter untuk kembali...", "dim"))
+
+        elif choice == "2":
+            print(colored("\nMasukkan hasil 4D (misal: 5287). Kosongkan untuk selesai.", "cyan"))
+            while True:
+                inp = input(f"Hasil {len(history)+1}: ").strip()
+                if not inp:
+                    break
+                if inp.isdigit() and len(inp) == 4:
+                    history.append(inp)
+                    print(colored("✓ Ditambahkan", "green"))
+                else:
+                    print(colored("✗ Harus 4 digit angka!", "red"))
+            save_history(history)
+
+        elif choice == "3":
+            backtest(history)
+
+        elif choice == "4":
+            show_stats(history)
+
+        elif choice == "5":
+            if input(colored("\nYakin hapus semua histori? (y/t): ", "red")).lower() == 'y':
+                history = []
+                if os.path.exists(HISTORY_FILE):
+                    os.remove(HISTORY_FILE)
+                print(colored("📁 Histori dihapus.", "green"))
+                time.sleep(1)
+
+        elif choice == "6":
+            print(colored("\nTerima kasih! Sampai jumpa 👋", "bright_yellow"))
+            break
+
+        else:
+            print(colored("Pilihan tidak valid!", "red"))
+            input(colored("\nTekan Enter...", "dim"))
+
+# ──────────────────────────────────────────────────────────────
+# Entry point
+# ──────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    try:
+        menu()
+    except KeyboardInterrupt:
+        print(colored("\n\nProgram dihentikan paksa.", "red"))
